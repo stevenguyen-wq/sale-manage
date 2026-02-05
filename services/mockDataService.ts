@@ -69,7 +69,7 @@ export const refreshCustomersFromCloud = async (): Promise<Customer[]> => {
     return [];
 };
 
-export const saveCustomer = (customer: Customer): void => {
+export const saveCustomer = async (customer: Customer): Promise<boolean> => {
   const current = getCustomers();
   const index = current.findIndex(c => c.id === customer.id);
   
@@ -84,7 +84,8 @@ export const saveCustomer = (customer: Customer): void => {
   }
 
   // --- SYNC TO GOOGLE SHEETS ---
-  syncToGoogleSheets('sync_customers', customer);
+  const result = await syncToGoogleSheets('sync_customers', customer);
+  return !!result;
 };
 
 // --- ORDER MANAGEMENT ---
@@ -104,13 +105,14 @@ export const refreshOrdersFromCloud = async (): Promise<Order[]> => {
     return [];
 };
 
-export const saveOrder = (order: Order): void => {
+export const saveOrder = async (order: Order): Promise<boolean> => {
   const current = getOrders();
   const updated = [...current, order];
   localStorage.setItem(KEY_ORDERS, JSON.stringify(updated));
   
   // --- SYNC TO GOOGLE SHEETS ---
-  syncToGoogleSheets('sync_orders', order);
+  const result = await syncToGoogleSheets('sync_orders', order);
+  return !!result;
 };
 
 export const getStaffIdsByBranch = (branch: Branch): string[] => {
