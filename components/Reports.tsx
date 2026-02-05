@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Order, Branch, IceCreamItem, ToppingItem } from '../types';
-import { getOrders, getUsers, getStaffIdsByBranch } from '../services/mockDataService';
+import { getOrders, getUsers, getStaffIdsByBranch, refreshOrdersFromCloud } from '../services/mockDataService';
 import { formatCurrency, formatNumber, removeVietnameseTones, COMPANY_LOGO_BASE64 } from '../constants';
 import { DollarSign, Package, X, Eye, FileDown, User as UserIcon, Building, Calendar, Trophy, Medal, Truck, Check, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -18,6 +18,7 @@ const Reports: React.FC<Props> = ({ user, viewMode }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Dashboard/Log Filters
   const [filterType, setFilterType] = useState<'week' | 'month' | 'year'>('month');
@@ -39,25 +40,34 @@ const Reports: React.FC<Props> = ({ user, viewMode }) => {
   };
 
   useEffect(() => {
-    // 1. Fetch Orders
-    const allOrders = getOrders();
-    
-    // 2. Determine base access rights
-    let accessibleOrders = allOrders;
-    
-    if (user.role === 'staff') {
-        // Staff sees only their own orders
-        accessibleOrders = allOrders.filter(o => o.salesId === user.id);
-    } else if (user.role === 'manager') {
-        // Manager sees orders from staff in their branch OR their own orders
-        const branchStaffIds = getStaffIdsByBranch(user.branch);
-        accessibleOrders = allOrders.filter(o => branchStaffIds.includes(o.salesId) || o.salesId === user.id);
-    }
-    // Admin sees all initially, filtered later by UI controls
+    const fetchData = async () => {
+        setIsLoading(true);
+        // 1. Refresh Orders from Cloud first to ensure data consistency
+        await refreshOrdersFromCloud();
 
-    // 3. Sort by date desc
-    accessibleOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setOrders(accessibleOrders);
+        // 2. Fetch Orders from LocalStorage
+        const allOrders = getOrders();
+        
+        // 3. Determine base access rights
+        let accessibleOrders = allOrders;
+        
+        if (user.role === 'staff') {
+            // Staff sees only their own orders
+            accessibleOrders = allOrders.filter(o => o.salesId === user.id);
+        } else if (user.role === 'manager') {
+            // Manager sees orders from staff in their branch OR their own orders
+            const branchStaffIds = getStaffIdsByBranch(user.branch);
+            accessibleOrders = allOrders.filter(o => branchStaffIds.includes(o.salesId) || o.salesId === user.id);
+        }
+        // Admin sees all initially, filtered later by UI controls
+
+        // 4. Sort by date desc
+        accessibleOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setOrders(accessibleOrders);
+        setIsLoading(false);
+    };
+
+    fetchData();
   }, [user]);
 
   // Apply UI Filters
@@ -529,6 +539,15 @@ const Reports: React.FC<Props> = ({ user, viewMode }) => {
         setIsGeneratingPdf(false);
     }
   };
+
+  if (isLoading) {
+      return (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <Loader2 size={40} className="animate-spin text-baby-accent mb-4"/>
+              <p>Đang đồng bộ dữ liệu báo cáo...</p>
+          </div>
+      );
+  }
 
   // VIEW: DASHBOARD
   if (viewMode === 'dashboard') {
