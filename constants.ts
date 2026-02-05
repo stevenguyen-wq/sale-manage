@@ -9,7 +9,7 @@ export const FLAVORS = [
   "Kem Trà sữa", "Kem Trà xanh", "Kem Vải", "Kem Vani", "Kem Việt quất",
   "Kem Xoài", "Kem Bạc hà chip", "Kem Ngân hà", "Kem Sorbet Chanh bạc hà",
   "Kem Sorbet Chanh dây", "Kem Sorbet Dứa mật",
-  "Sữa chua", "Phúc bồn tử", "Sữa gạo"
+  "Kem Sữa chua", "Kem Phúc bồn tử", "Kem Sữa gạo"
 ];
 
 export const ICE_CREAM_PRICES: Record<IceCreamLine, Record<IceCreamSize, number>> = {
