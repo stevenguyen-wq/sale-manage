@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Order, Branch, IceCreamItem, ToppingItem } from '../types';
-import { getOrders, MOCK_USERS, getStaffIdsByBranch } from '../services/mockDataService';
+import { getOrders, getUsers, getStaffIdsByBranch } from '../services/mockDataService';
 import { formatCurrency, formatNumber, removeVietnameseTones, COMPANY_LOGO_BASE64 } from '../constants';
 import { DollarSign, Package, X, Eye, FileDown, User as UserIcon, Building, Calendar, Trophy, Medal, Truck, Check, Loader2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -33,7 +33,10 @@ const Reports: React.FC<Props> = ({ user, viewMode }) => {
   const [showFilters, setShowFilters] = useState(false);
 
   // Helper to find user info for an order
-  const getOrderUser = (salesId: string) => MOCK_USERS.find(u => u.id === salesId);
+  const getOrderUser = (salesId: string) => {
+      const users = getUsers();
+      return users.find(u => u.id === salesId);
+  };
 
   useEffect(() => {
     // 1. Fetch Orders
@@ -918,7 +921,7 @@ const Reports: React.FC<Props> = ({ user, viewMode }) => {
                                 className="w-full bg-white border border-slate-300 text-baby-navy font-bold py-2 px-4 rounded hover:bg-slate-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-sm"
                             >
                                 {isGeneratingPdf ? <Loader2 size={18} className="animate-spin"/> : <FileDown size={18}/>} 
-                                {isGeneratingPdf ? 'Đang tạo...' : 'Tải PDF'}
+                                {isGeneratingPdf ? 'Tải PDF' : 'Tải PDF'}
                             </button>
                        </div>
                   </div>
