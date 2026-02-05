@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Customer, Order, IceCreamItem, ToppingItem, IceCreamLine, IceCreamSize } from '../types';
 import { getCustomers, saveOrder, getOrders, getStaffIdsByBranch } from '../services/mockDataService';
@@ -15,6 +16,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [step, setStep] = useState<'details' | 'items' | 'review'>('details');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Order State
   const [selectedCustId, setSelectedCustId] = useState<string>('');
@@ -155,36 +157,49 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
     return { icTotal, topTotal, revenue, finalAmount, totalQty, deposit };
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     const cust = customers.find(c => c.id === selectedCustId);
     if (!cust) return;
 
-    const { icTotal, topTotal, revenue, finalAmount, totalQty, deposit } = calculateTotals();
+    setIsSubmitting(true);
+    try {
+        const { icTotal, topTotal, revenue, finalAmount, totalQty, deposit } = calculateTotals();
 
-    const newOrder: Order = {
-      id: Date.now().toString(),
-      salesId: user.id,
-      customerId: cust.id,
-      customerName: cust.name,
-      companyName: cust.companyName,
-      date: orderDate,
-      hasInvoice,
-      iceCreamItems,
-      toppingItems,
-      discountItems,
-      giftItems,
-      totalIceCreamRevenue: icTotal,
-      totalToppingRevenue: topTotal,
-      totalRevenue: revenue, // Sales Revenue only
-      shippingCost: shippingCost, // Saved separately
-      finalAmount: finalAmount, // Total to pay
-      totalQuantity: totalQty,
-      depositAmount: deposit
-    };
+        const newOrder: Order = {
+          id: Date.now().toString(),
+          salesId: user.id,
+          customerId: cust.id,
+          customerName: cust.name,
+          companyName: cust.companyName,
+          date: orderDate,
+          hasInvoice,
+          iceCreamItems,
+          toppingItems,
+          discountItems,
+          giftItems,
+          totalIceCreamRevenue: icTotal,
+          totalToppingRevenue: topTotal,
+          totalRevenue: revenue, // Sales Revenue only
+          shippingCost: shippingCost, // Saved separately
+          finalAmount: finalAmount, // Total to pay
+          totalQuantity: totalQty,
+          depositAmount: deposit
+        };
 
-    saveOrder(newOrder);
-    alert("Đơn hàng đã được lưu thành công!");
-    onOrderComplete();
+        const success = await saveOrder(newOrder);
+        
+        if (success) {
+            alert("Đơn hàng đã được lưu và gửi thành công!");
+        } else {
+            alert("Đơn hàng đã lưu vào máy nhưng chưa gửi được lên hệ thống (Lỗi kết nối). Vui lòng báo quản trị viên.");
+        }
+        onOrderComplete();
+    } catch (e) {
+        console.error("Submit Error", e);
+        alert("Có lỗi xảy ra khi lưu đơn hàng.");
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
   const generatePDF = async () => {
@@ -931,9 +946,11 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
             </button>
             <button 
                 onClick={handleSubmitOrder}
-                className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-500 transition-colors shadow-lg shadow-green-200 flex items-center gap-2"
+                disabled={isSubmitting}
+                className="bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-500 transition-colors shadow-lg shadow-green-200 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-                <CheckCircle size={20}/> Submit Đơn
+                {isSubmitting ? <Loader2 size={20} className="animate-spin"/> : <CheckCircle size={20}/>}
+                {isSubmitting ? 'Đang gửi...' : 'Submit Đơn'}
             </button>
           </div>
         </div>
