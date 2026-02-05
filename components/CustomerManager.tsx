@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, User, Order, IceCreamLine, IceCreamSize } from '../types';
 import { getCustomers, saveCustomer, getOrders, getUsers, getStaffIdsByBranch, refreshCustomersFromCloud, refreshOrdersFromCloud } from '../services/mockDataService';
-import { Plus, Search, MapPin, Phone, User as UserIcon, Building, Filter, Calendar, X, ArrowLeft, History, DollarSign, Package, Mail, Briefcase, BarChart3, Clock, Pencil, BadgeCheck, FileText, Loader2 } from 'lucide-react';
+import { Plus, Search, MapPin, Phone, User as UserIcon, Building, Filter, Calendar, X, ArrowLeft, History, DollarSign, Package, Mail, Briefcase, BarChart3, Clock, Pencil, BadgeCheck, FileText, Loader2, RefreshCcw } from 'lucide-react';
 import { formatCurrency, LINES, SIZES, calculateDaysDifference } from '../constants';
 
 interface Props {
@@ -25,6 +25,7 @@ interface ProvinceDetail extends LocationOption {
 const CustomerManager: React.FC<Props> = ({ user }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'detail'>('list');
   
   // Detail View State
@@ -80,16 +81,22 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
     const allCustomers = getCustomers();
     const allOrders = getOrders();
 
+    console.log(`Loaded ${allCustomers.length} customers and ${allOrders.length} orders.`);
+
     // Enrich customers with aggregated data
     const enrichedCustomers = allCustomers.map(cust => {
-        const custOrders = allOrders.filter(o => o.customerId === cust.id);
+        // FIX: Ensure ID comparison is robust (convert both to String to avoid number vs string mismatch)
+        const custOrders = allOrders.filter(o => String(o.customerId) === String(cust.id));
+        
         const totalOrders = custOrders.length;
-        const totalIceCreamRevenue = custOrders.reduce((acc, o) => acc + o.totalIceCreamRevenue, 0);
-        const totalToppingRevenue = custOrders.reduce((acc, o) => acc + o.totalToppingRevenue, 0);
+        const totalIceCreamRevenue = custOrders.reduce((acc, o) => acc + (Number(o.totalIceCreamRevenue) || 0), 0);
+        const totalToppingRevenue = custOrders.reduce((acc, o) => acc + (Number(o.totalToppingRevenue) || 0), 0);
         
         // Revised: Total Boxes should ONLY account for purchased ice cream items, excluding discounts/gifts.
+        // FIX: Add defensive check for iceCreamItems array
         const totalBoxes = custOrders.reduce((acc, o) => {
-             const itemsQty = o.iceCreamItems.reduce((iAcc, i) => iAcc + i.quantity, 0);
+             const items = o.iceCreamItems || []; 
+             const itemsQty = items.reduce((iAcc, i) => iAcc + (Number(i.quantity) || 0), 0);
              return acc + itemsQty;
         }, 0);
         
@@ -115,13 +122,20 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
     } else if (user.role === 'manager') {
         const branchStaffIds = getStaffIdsByBranch(user.branch);
         // Manager sees customers of staff in their branch OR their own customers
-        // Also include customers with no salesId assigned yet if needed, or match logic
         setCustomers(enrichedCustomers.filter(c => 
             branchStaffIds.includes(c.salesId) || c.salesId === user.id
         ));
     } else {
       setCustomers(enrichedCustomers.filter(c => c.salesId === user.id));
     }
+  };
+
+  const handleManualRefresh = async () => {
+      setIsRefreshing(true);
+      await refreshCustomersFromCloud();
+      await refreshOrdersFromCloud();
+      loadData();
+      setIsRefreshing(false);
   };
 
   // --- Handlers ---
@@ -131,8 +145,9 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
     
     // Get History
     const allOrders = getOrders();
+    // FIX: Ensure String comparison for IDs
     const history = allOrders
-        .filter(o => o.customerId === customer.id)
+        .filter(o => String(o.customerId) === String(customer.id))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Newest first
     
     setCustomerHistory(history);
@@ -167,9 +182,10 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
 
     customerHistory.forEach(order => {
         // Only count purchased items for consistency with totalBoxes logic
-        order.iceCreamItems.forEach(item => {
+        const items = order.iceCreamItems || [];
+        items.forEach(item => {
             if (stats[item.line] && stats[item.line][item.size] !== undefined) {
-                stats[item.line][item.size] += item.quantity;
+                stats[item.line][item.size] += (Number(item.quantity) || 0);
             }
         });
     });
@@ -276,7 +292,7 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
         setViewMode('detail');
         // Refresh detail view data
         const allOrders = getOrders();
-        const history = allOrders.filter(o => o.customerId === customerToSave.id);
+        const history = allOrders.filter(o => String(o.customerId) === String(customerToSave.id));
         setCustomerHistory(history);
     } else {
         setViewMode('list');
@@ -341,8 +357,18 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
             )}
             {viewMode === 'list' ? 'Danh sách khách hàng' : (formData.id ? 'Cập nhật khách hàng' : 'Chi tiết khách hàng')}
         </h2>
+        
         {viewMode === 'list' && (
-          <div className="flex gap-2 w-full md:w-auto">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <button
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="flex-1 md:flex-none justify-center px-3 py-2 rounded-lg flex items-center space-x-2 transition-all bg-white border border-slate-300 text-slate-600 hover:text-baby-navy hover:shadow disabled:opacity-50"
+                title="Tải lại dữ liệu từ Google Sheet"
+            >
+                <RefreshCcw size={18} className={isRefreshing ? "animate-spin" : ""} />
+                <span className="hidden sm:inline">{isRefreshing ? "Đang tải..." : "Làm mới"}</span>
+            </button>
             <button
                 onClick={() => setShowFilters(!showFilters)}
                 className={`flex-1 md:flex-none justify-center px-4 py-2 rounded-lg flex items-center space-x-2 transition-all border ${showFilters ? 'bg-slate-200 border-baby-accent text-baby-navy' : 'bg-white border-slate-300 text-slate-600 hover:text-baby-navy hover:shadow'}`}
@@ -680,8 +706,8 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
                                         <td className="px-4 py-3 text-center text-slate-800 font-semibold">{order.totalQuantity}</td>
                                         <td className="px-4 py-3">
                                             <div className="text-xs text-slate-500 max-w-xs truncate">
-                                                {order.iceCreamItems.map(i => `${i.line} ${i.flavor}`).join(', ')}
-                                                {order.toppingItems.length > 0 && `, ${order.toppingItems.length} topping`}
+                                                {(order.iceCreamItems || []).map(i => `${i.line} ${i.flavor}`).join(', ')}
+                                                {(order.toppingItems || []).length > 0 && `, ${(order.toppingItems || []).length} topping`}
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 text-right font-bold text-baby-accent">
