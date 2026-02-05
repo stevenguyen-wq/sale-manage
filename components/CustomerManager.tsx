@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, User, Order, IceCreamLine, IceCreamSize } from '../types';
-import { getCustomers, saveCustomer, getOrders, MOCK_USERS, getStaffIdsByBranch, refreshCustomersFromCloud, refreshOrdersFromCloud } from '../services/mockDataService';
+import { getCustomers, saveCustomer, getOrders, getUsers, getStaffIdsByBranch, refreshCustomersFromCloud, refreshOrdersFromCloud } from '../services/mockDataService';
 import { Plus, Search, MapPin, Phone, User as UserIcon, Building, Filter, Calendar, X, ArrowLeft, History, DollarSign, Package, Mail, Briefcase, BarChart3, Clock, Pencil, BadgeCheck, FileText, Loader2 } from 'lucide-react';
 import { formatCurrency, LINES, SIZES, calculateDaysDifference } from '../constants';
 
@@ -319,12 +319,15 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
   });
 
   // Get staff for Sales Assignment dropdown
-  const staffList = MOCK_USERS.filter(u => {
+  const staffList = getUsers().filter(u => {
       if(user.role === 'admin') return u.role === 'staff' || u.role === 'manager';
       if(user.role === 'manager') return u.branch === user.branch && (u.role === 'staff' || u.role === 'manager');
       return false;
   });
-  const getStaffName = (id: string) => MOCK_USERS.find(u => u.id === id)?.fullName || 'Không xác định';
+  const getStaffName = (id: string) => {
+      const users = getUsers();
+      return users.find(u => u.id === id)?.fullName || 'Không xác định';
+  };
 
   return (
     <div className="space-y-6">
