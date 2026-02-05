@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { User, Branch } from '../types';
-import { MOCK_USERS } from '../services/mockDataService';
+import { getUsers } from '../services/mockDataService';
 import { X, SlidersHorizontal } from 'lucide-react';
 
 interface ReportsFilterProps {
@@ -39,7 +39,7 @@ const ReportsFilter: React.FC<ReportsFilterProps> = ({
 }) => {
     
   // Calculate employees list based on role
-  const employees = MOCK_USERS.filter(u => {
+  const employees = getUsers().filter(u => {
       if (user.role === 'admin') return true;
       if (user.role === 'manager') return u.branch === user.branch;
       return false;
