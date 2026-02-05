@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Customer, Order, IceCreamItem, ToppingItem, IceCreamLine, IceCreamSize } from '../types';
-import { getCustomers, saveOrder, getOrders, getStaffIdsByBranch } from '../services/mockDataService';
+import { getCustomers, saveOrder, getOrders, getStaffIdsByBranch, getUsers } from '../services/mockDataService';
 import { FLAVORS, ICE_CREAM_PRICES, LINES, SIZES, formatCurrency, formatNumber, removeVietnameseTones, COMPANY_LOGO_BASE64 } from '../constants';
 import { Trash2, PlusCircle, CheckCircle, Gift, Percent, FileDown, Truck, Loader2, IceCream } from 'lucide-react';
 import { jsPDF } from 'jspdf';
@@ -66,7 +66,9 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
       setCustomers(all);
     } else if (user.role === 'manager') {
       const branchStaffIds = getStaffIdsByBranch(user.branch);
-      setCustomers(all.filter(c => branchStaffIds.includes(c.salesId)));
+      // Manager sees all customers belonging to their branch staff OR themselves
+      // (Assuming customer.salesId links to the staff)
+      setCustomers(all.filter(c => branchStaffIds.includes(c.salesId) || c.salesId === user.id));
     } else {
       setCustomers(all.filter(c => c.salesId === user.id));
     }
@@ -90,6 +92,14 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
           setGiftItems([]);
       }
   }, [selectedCustId]);
+
+  // Helper to get assigned sales person for the selected customer
+  const getAssignedSalesPerson = (customerId: string): User | undefined => {
+      const cust = customers.find(c => c.id === customerId);
+      if (!cust || !cust.salesId) return undefined;
+      const allUsers = getUsers();
+      return allUsers.find(u => u.id === cust.salesId);
+  };
 
   // --- Handlers for Purchase Items ---
   const addIceCream = () => {
@@ -165,9 +175,14 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
     try {
         const { icTotal, topTotal, revenue, finalAmount, totalQty, deposit } = calculateTotals();
 
+        // Determine who gets credit for the sale.
+        // If Admin/Manager creates it, it goes to the customer's assigned sale.
+        // If the customer has no assigned sale (legacy), fallback to current user.
+        const effectiveSalesId = cust.salesId || user.id;
+
         const newOrder: Order = {
           id: Date.now().toString(),
-          salesId: user.id,
+          salesId: effectiveSalesId,
           customerId: cust.id,
           customerName: cust.name,
           companyName: cust.companyName,
@@ -207,6 +222,10 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         setIsGeneratingPdf(true);
         const cust = customers.find(c => c.id === selectedCustId);
         if (!cust) return;
+        
+        // Find assigned sales person info
+        const assignedSale = getAssignedSalesPerson(cust.id) || user;
+
         const { icTotal, topTotal, revenue, finalAmount } = calculateTotals();
 
         // Calculate III Total (Discounts/Gifts Value)
@@ -241,8 +260,6 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         }
 
         // --- Prepare Logo ---
-        // If the user hasn't provided a base64 string in constants.ts yet, we could fetch a placeholder or try to use what we have.
-        // For this demo, I'll attempt to use the constant directly.
         let logoData = COMPANY_LOGO_BASE64;
         
         // Helper to process text
@@ -323,7 +340,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         const leftX = 14;
         doc.text(`${txt("Tên Khách hàng")}: ${txt(cust.companyName)}`, leftX, y);
         y += 6;
-        doc.text(`${txt("Nhân viên phụ trách")}: ${txt(user.fullName)}`, leftX, y);
+        doc.text(`${txt("Nhân viên phụ trách")}: ${txt(assignedSale.fullName)}`, leftX, y);
         y += 6;
         doc.text(`${txt("Số điện thoại khách hàng")}: ${cust.phone}`, leftX, y);
         y += 6;
@@ -814,6 +831,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
 
   // Review Step
   const cust = customers.find(c => c.id === selectedCustId);
+  const assignedSaleName = cust ? getAssignedSalesPerson(cust.id)?.fullName : user.fullName;
 
   return (
     <div className="max-w-3xl mx-auto bg-white p-8 rounded-xl border border-slate-200 shadow-2xl">
@@ -833,8 +851,8 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
           <span className="text-slate-800 font-medium">{hasInvoice ? "Có xuất hoá đơn" : "Không"}</span>
         </div>
         <div>
-           <span className="text-slate-500 block">Nhân viên sale:</span>
-           <span className="text-slate-800 font-medium">{user.fullName}</span>
+           <span className="text-slate-500 block">Nhân viên sale phụ trách:</span>
+           <span className="text-slate-800 font-medium">{assignedSaleName || user.fullName}</span>
         </div>
       </div>
 
