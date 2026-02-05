@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
-import { User, Branch } from '../types';
-import { getOrders, getCustomers, getUsers } from '../services/mockDataService';
+import React, { useState, useMemo, useEffect } from 'react';
+import { User, Branch, Order } from '../types';
+import { getOrders, getCustomers, getUsers, refreshOrdersFromCloud } from '../services/mockDataService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Filter, MapPin, Users, Building } from 'lucide-react';
+import { Filter, MapPin, Users, Building, Loader2 } from 'lucide-react';
 
 interface Props {
   user: User;
@@ -12,9 +12,23 @@ interface Props {
 const Analysis: React.FC<Props> = ({ user }) => {
   const [filterPeriod, setFilterPeriod] = useState<'week' | 'month' | 'year'>('month');
   const [filterBranch, setFilterBranch] = useState<Branch | 'All'>('All');
+  const [localOrders, setLocalOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Initial Data Load
+  useEffect(() => {
+      const init = async () => {
+          setIsLoading(true);
+          await refreshOrdersFromCloud();
+          setLocalOrders(getOrders());
+          setIsLoading(false);
+      };
+      init();
+  }, []);
 
   const analysisData = useMemo(() => {
-    const orders = getOrders();
+    // Use localOrders instead of calling getOrders directly in useMemo
+    const orders = localOrders;
     const allUsers = getUsers();
     const now = new Date();
 
@@ -115,7 +129,16 @@ const Analysis: React.FC<Props> = ({ user }) => {
 
     return { topFlavors, topToppings, locationData, totalProvinces, totalAgents };
 
-  }, [filterPeriod, filterBranch, user.role, user.branch, user.id]);
+  }, [filterPeriod, filterBranch, user.role, user.branch, user.id, localOrders]);
+
+  if (isLoading) {
+      return (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <Loader2 size={40} className="animate-spin text-baby-accent mb-4"/>
+              <p>Đang phân tích dữ liệu...</p>
+          </div>
+      );
+  }
 
   return (
     <div className="space-y-8 animate-fade-in">
