@@ -33,7 +33,9 @@ export const syncToGoogleSheets = async (
 export const fetchFromSheet = async (action: string) => {
   try {
     console.log(`[GoogleSheet] Fetching ${action}...`);
-    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=${action}`);
+    // Thêm timestamp để tránh caching của trình duyệt
+    const timestamp = new Date().getTime();
+    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=${action}&_t=${timestamp}`);
     
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
