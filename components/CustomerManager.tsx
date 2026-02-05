@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, User, Order, IceCreamLine, IceCreamSize } from '../types';
-import { getCustomers, saveCustomer, getOrders, MOCK_USERS, getStaffIdsByBranch } from '../services/mockDataService';
-import { Plus, Search, MapPin, Phone, User as UserIcon, Building, Filter, Calendar, X, ArrowLeft, History, DollarSign, Package, Mail, Briefcase, BarChart3, Clock, Pencil, BadgeCheck, FileText } from 'lucide-react';
+import { getCustomers, saveCustomer, getOrders, MOCK_USERS, getStaffIdsByBranch, refreshCustomersFromCloud, refreshOrdersFromCloud } from '../services/mockDataService';
+import { Plus, Search, MapPin, Phone, User as UserIcon, Building, Filter, Calendar, X, ArrowLeft, History, DollarSign, Package, Mail, Briefcase, BarChart3, Clock, Pencil, BadgeCheck, FileText, Loader2 } from 'lucide-react';
 import { formatCurrency, LINES, SIZES, calculateDaysDifference } from '../constants';
 
 interface Props {
@@ -23,6 +24,7 @@ interface ProvinceDetail extends LocationOption {
 
 const CustomerManager: React.FC<Props> = ({ user }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'add' | 'detail'>('list');
   
   // Detail View State
@@ -49,7 +51,24 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
-    loadData();
+    const init = async () => {
+        setIsLoading(true);
+        try {
+            // Fetch fresh data from Google Sheets to ensure Admin/Manager sees latest
+            await refreshCustomersFromCloud();
+            await refreshOrdersFromCloud();
+            
+            // Then calculate and set state
+            loadData();
+        } catch (e) {
+            console.error("Failed to load customer data", e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    init();
+
     // Load Provinces on mount
     fetch('https://provinces.open-api.vn/api/p/')
         .then(res => res.json())
@@ -96,7 +115,10 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
     } else if (user.role === 'manager') {
         const branchStaffIds = getStaffIdsByBranch(user.branch);
         // Manager sees customers of staff in their branch OR their own customers
-        setCustomers(enrichedCustomers.filter(c => branchStaffIds.includes(c.salesId) || c.salesId === user.id));
+        // Also include customers with no salesId assigned yet if needed, or match logic
+        setCustomers(enrichedCustomers.filter(c => 
+            branchStaffIds.includes(c.salesId) || c.salesId === user.id
+        ));
     } else {
       setCustomers(enrichedCustomers.filter(c => c.salesId === user.id));
     }
@@ -345,8 +367,13 @@ const CustomerManager: React.FC<Props> = ({ user }) => {
         )}
       </div>
 
-      {viewMode === 'list' ? (
-        <div className="space-y-4">
+      {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+              <Loader2 size={40} className="animate-spin text-baby-accent mb-4"/>
+              <p>Đang tải dữ liệu từ hệ thống...</p>
+          </div>
+      ) : viewMode === 'list' ? (
+        <div className="space-y-4 animate-fade-in">
             {/* Filter Section */}
             {showFilters && (
                 <div className="bg-white p-4 rounded-lg border border-slate-200 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4 items-end shadow-sm">
