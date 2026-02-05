@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo } from 'react';
 import { User, Branch } from '../types';
-import { getOrders, getCustomers, MOCK_USERS } from '../services/mockDataService';
+import { getOrders, getCustomers, getUsers } from '../services/mockDataService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Filter, MapPin, Users, Building } from 'lucide-react';
 
@@ -14,12 +15,13 @@ const Analysis: React.FC<Props> = ({ user }) => {
 
   const analysisData = useMemo(() => {
     const orders = getOrders();
+    const allUsers = getUsers();
     const now = new Date();
 
     // 1. Filter Orders
     const filteredOrders = orders.filter(o => {
       const d = new Date(o.date);
-      const saleUser = MOCK_USERS.find(u => u.id === o.salesId);
+      const saleUser = allUsers.find(u => u.id === o.salesId);
 
       // Role Restriction Logic
       if (user.role === 'manager') {
