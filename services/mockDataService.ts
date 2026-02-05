@@ -1,6 +1,6 @@
 
 import { User, Customer, Order, Branch } from '../types';
-import { syncToGoogleSheets, fetchUsersFromSheet } from './googleSheetService';
+import { syncToGoogleSheets, fetchUsersFromSheet, fetchFromSheet } from './googleSheetService';
 
 // Initial Users Data
 // EMPTY - All users come from Google Sheet now
@@ -59,6 +59,16 @@ export const getCustomers = (): Customer[] => {
   return data ? JSON.parse(data) : [];
 };
 
+// Hàm mới: Chủ động tải khách hàng từ Google Sheet
+export const refreshCustomersFromCloud = async (): Promise<Customer[]> => {
+    const data = await fetchFromSheet('get_customers');
+    if (data && Array.isArray(data)) {
+        localStorage.setItem(KEY_CUSTOMERS, JSON.stringify(data));
+        return data;
+    }
+    return [];
+};
+
 export const saveCustomer = (customer: Customer): void => {
   const current = getCustomers();
   const index = current.findIndex(c => c.id === customer.id);
@@ -84,6 +94,16 @@ export const getOrders = (): Order[] => {
   return data ? JSON.parse(data) : [];
 };
 
+// Hàm mới: Chủ động tải đơn hàng từ Google Sheet
+export const refreshOrdersFromCloud = async (): Promise<Order[]> => {
+    const data = await fetchFromSheet('get_orders');
+    if (data && Array.isArray(data)) {
+        localStorage.setItem(KEY_ORDERS, JSON.stringify(data));
+        return data;
+    }
+    return [];
+};
+
 export const saveOrder = (order: Order): void => {
   const current = getOrders();
   const updated = [...current, order];
@@ -99,8 +119,10 @@ export const getStaffIdsByBranch = (branch: Branch): string[] => {
 
 // Helper to seed data if empty
 export const seedData = async () => {
-  // Ensure users are initialized in LocalStorage from Cloud
+  // 1. Users
   await refreshUsersFromCloud();
-  
-  // No longer seeding demo customers or users
+  // 2. Customers
+  await refreshCustomersFromCloud();
+  // 3. Orders
+  await refreshOrdersFromCloud();
 };
