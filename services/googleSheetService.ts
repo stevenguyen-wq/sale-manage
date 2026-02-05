@@ -29,22 +29,20 @@ export const syncToGoogleSheets = async (
   }
 };
 
-// Hàm mới để lấy danh sách User từ Sheet NHAN_VIEN
-export const fetchUsersFromSheet = async () => {
+// Generic fetch function for GET requests
+export const fetchFromSheet = async (action: string) => {
   try {
-    console.log("[GoogleSheet] Fetching users...");
-    // Sử dụng fetch GET
-    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=get_users`);
+    console.log(`[GoogleSheet] Fetching ${action}...`);
+    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=${action}`);
     
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const result = await response.json();
-    console.log("[GoogleSheet] Users fetched:", result);
+    console.log(`[GoogleSheet] ${action} fetched:`, result);
     
-    // Google Script trả về mảng trực tiếp [ {}, {} ] hoặc object { data: [] } tùy cách viết
-    // Code GAS ở bước 1 trả về mảng trực tiếp
+    // Check format of response
     if (Array.isArray(result)) {
         return result;
     } else if (result && Array.isArray(result.data)) {
@@ -53,7 +51,12 @@ export const fetchUsersFromSheet = async () => {
     
     return [];
   } catch (error) {
-    console.error("[GoogleSheet] Error fetching users:", error);
+    console.error(`[GoogleSheet] Error fetching ${action}:`, error);
     return [];
   }
+};
+
+// Hàm lấy danh sách User từ Sheet NHAN_VIEN
+export const fetchUsersFromSheet = async () => {
+  return await fetchFromSheet('get_users');
 };
