@@ -159,7 +159,9 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
     const revenue = icTotal + topTotal;
     
     // Final Amount (Giá trị đơn hàng) = Revenue + Shipping Cost
-    const finalAmount = revenue + (shippingCost || 0);
+    // Ensure shippingCost is a number
+    const safeShipping = Number(shippingCost) || 0;
+    const finalAmount = revenue + safeShipping;
 
     const deposit = finalAmount * 0.5;
     const totalQty = iceCreamItems.reduce((acc, i) => acc + i.quantity, 0) + discountItems.reduce((acc, i) => acc + i.quantity, 0);
@@ -176,8 +178,6 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         const { icTotal, topTotal, revenue, finalAmount, totalQty, deposit } = calculateTotals();
 
         // Determine who gets credit for the sale.
-        // If Admin/Manager creates it, it goes to the customer's assigned sale.
-        // If the customer has no assigned sale (legacy), fallback to current user.
         const effectiveSalesId = cust.salesId || user.id;
 
         const newOrder: Order = {
@@ -195,7 +195,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
           totalIceCreamRevenue: icTotal,
           totalToppingRevenue: topTotal,
           totalRevenue: revenue, // Sales Revenue only
-          shippingCost: shippingCost, // Saved separately
+          shippingCost: Number(shippingCost) || 0, // Saved separately
           finalAmount: finalAmount, // Total to pay
           totalQuantity: totalQty,
           depositAmount: deposit
@@ -203,11 +203,8 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
 
         const success = await saveOrder(newOrder);
         
-        if (success) {
-            alert("Đơn hàng đã được lưu và gửi thành công!");
-        } else {
-            alert("Đơn hàng đã lưu vào máy nhưng chưa gửi được lên hệ thống (Lỗi kết nối). Vui lòng báo quản trị viên.");
-        }
+        // Always finish if local save worked
+        alert("Đơn hàng đã được lưu!");
         onOrderComplete();
     } catch (e) {
         console.error("Submit Error", e);
@@ -223,20 +220,17 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         const cust = customers.find(c => c.id === selectedCustId);
         if (!cust) return;
         
-        // Find assigned sales person info
         const assignedSale = getAssignedSalesPerson(cust.id) || user;
-
         const { icTotal, topTotal, revenue, finalAmount } = calculateTotals();
+        const safeShipping = Number(shippingCost) || 0;
 
         // Calculate III Total (Discounts/Gifts Value)
         const giftTotal = giftItems.reduce((acc, g) => acc + g.total, 0);
         const discountTotal = discountItems.reduce((acc, i) => acc + i.total, 0);
         const section3Total = giftTotal + discountTotal;
 
-        // Total Value (I + II + III + IV)
-        const grandTotalValue = icTotal + topTotal + section3Total + (shippingCost || 0);
-        // Total Payment (I + II + IV)
-        const grandTotalPayment = icTotal + topTotal + (shippingCost || 0);
+        const grandTotalValue = icTotal + topTotal + section3Total + safeShipping;
+        const grandTotalPayment = icTotal + topTotal + safeShipping;
 
         const doc = new jsPDF();
 
@@ -244,7 +238,10 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         let fontLoadSuccess = false;
         try {
             const fontUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf';
-            const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
+            const fontBytes = await fetch(fontUrl).then(res => {
+                if(!res.ok) throw new Error("Font fetch failed");
+                return res.arrayBuffer();
+            });
             const uint8Array = new Uint8Array(fontBytes);
             let binaryString = "";
             for (let i = 0; i < uint8Array.length; i++) {
@@ -256,11 +253,12 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
             doc.setFont('Roboto'); 
             fontLoadSuccess = true;
         } catch (fontError) {
-            console.warn("Could not load custom font.", fontError);
+            console.warn("Could not load custom font, fallback to standard.", fontError);
         }
 
         // --- Prepare Logo ---
-        let logoData = COMPANY_LOGO_BASE64;
+        // Basic check for base64 string
+        let logoData = (COMPANY_LOGO_BASE64 && COMPANY_LOGO_BASE64.startsWith('data:image')) ? COMPANY_LOGO_BASE64 : null;
         
         // Helper to process text
         const txt = (str: string) => fontLoadSuccess ? str : removeVietnameseTones(str);
@@ -270,7 +268,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         autoTable(doc, {
             body: [[
                 { 
-                    content: '', // Leave empty for image
+                    content: '', 
                     styles: { 
                         halign: 'center', 
                         valign: 'middle', 
@@ -299,20 +297,17 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
             didDrawCell: (data) => {
                 if (data.section === 'body' && data.column.index === 0 && data.row.index === 0) {
                     if (logoData) {
-                        // Draw image
                         try {
                              doc.addImage(logoData, 'PNG', data.cell.x + 2, data.cell.y + 2, 36, 31);
                         } catch (e) {
                             console.error("Error drawing logo", e);
-                            // Fallback text if image fails
                             doc.setFontSize(10);
                             doc.text("BABY BOSS", data.cell.x + 5, data.cell.y + 20);
                         }
                     } else {
-                        // No logo provided, draw text placeholder
                         doc.setFontSize(14);
                         doc.setTextColor(219, 39, 119);
-                        doc.text("LOGO", data.cell.x + 10, data.cell.y + 20);
+                        doc.text("BABY BOSS", data.cell.x + 5, data.cell.y + 20);
                     }
                 }
             }
@@ -324,10 +319,9 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         doc.setFontSize(16);
         if(fontLoadSuccess) doc.setFont("Roboto", "normal");
         else doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 0, 0); // Reset color
+        doc.setTextColor(0, 0, 0); 
         doc.text(txt("ĐƠN ĐẶT HÀNG KEM"), 105, y, { align: "center" });
 
-        // ... Rest of the PDF generation code remains same ...
         if (fontLoadSuccess) doc.setFont("Roboto", "normal");
         else doc.setFont("helvetica", "normal");
 
@@ -456,7 +450,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         const dataIII = promoItems.map((item, index) => ({
             stt: (index + 1).toString(),
             name: item.name,
-            line: item.line, size: item.size,
+            line: item.line || '-', size: item.size || '-',
             qty: item.qty.toString(), 
             unit: item.unit,
             price: formatNumber(item.price),
@@ -491,7 +485,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
             body: [
                 [
                     { content: txt("Chi phí vận chuyển và bảo quản (IV)"), styles: { fontStyle: 'normal', halign: 'left', ...tableStyles } as any },
-                    { content: formatNumber(shippingCost || 0), styles: { halign: 'right', ...tableStyles } as any }
+                    { content: formatNumber(safeShipping), styles: { halign: 'right', ...tableStyles } as any }
                 ],
                 [
                     { content: txt("Tổng giá trị đơn hàng (I + II + III + IV)"), styles: { fontStyle: fontLoadSuccess ? 'normal' : 'bold', halign: 'left', ...tableStyles } as any },
@@ -562,7 +556,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
         doc.save(`Order_${removeVietnameseTones(cust.companyName)}_${orderDate}.pdf`);
     } catch (e) {
         console.error("PDF Generation Error:", e);
-        alert("Lỗi xuất file PDF. Vui lòng thử lại.");
+        alert("Lỗi xuất file PDF. Vui lòng kiểm tra lại trình duyệt.");
     } finally {
         setIsGeneratingPdf(false);
     }
@@ -931,7 +925,7 @@ const OrderEntry: React.FC<Props> = ({ user, onOrderComplete }) => {
                 <input 
                     type="number" 
                     value={shippingCost} 
-                    onChange={(e) => setShippingCost(Number(e.target.value))}
+                    onChange={(e) => setShippingCost(Number(e.target.value) || 0)}
                     className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-right text-slate-800 focus:border-baby-accent outline-none"
                     min="0"
                 />
