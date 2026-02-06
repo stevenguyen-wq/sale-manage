@@ -8,28 +8,28 @@ export const syncToGoogleSheets = async (
   data: any
 ) => {
   try {
-    // Google Apps Script Web App thường yêu cầu no-cors hoặc redirect handling
-    // Tuy nhiên để lấy kết quả trả về, ta cần cors.
-    // Đảm bảo script trả về ContentService.createTextOutput...setMimeType(JSON)
-    const response = await fetch(GOOGLE_SCRIPT_URL, {
+    // Sử dụng mode 'no-cors' để tránh lỗi chặn CORS từ trình duyệt khi gọi Google Apps Script
+    // Lưu ý: Với no-cors, chúng ta KHÔNG THỂ đọc nội dung phản hồi (response.json() sẽ lỗi)
+    // Chúng ta chấp nhận mô hình "Fire and Forget" (Gửi và quên)
+    await fetch(GOOGLE_SCRIPT_URL, {
       method: "POST",
-      // Sử dụng mode 'no-cors' sẽ không đọc được response, nên ta dùng default cors
-      // Yêu cầu Backend phải handle OPTIONS hoặc trả về đúng headers (GAS tự động xử lý cái này khá tốt)
+      mode: "no-cors", 
       headers: {
-        "Content-Type": "text/plain;charset=utf-8", // GAS yêu cầu text/plain để không trigger preflight OPTIONS phức tạp
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ action, data }),
     });
 
-    const result = await response.json();
-    console.log(`[GoogleSheet] Synced ${action}:`, result);
-    return result;
+    console.log(`[GoogleSheet] Synced ${action} (No-CORS sent)`);
+    return { success: true }; // Giả định thành công vì không đọc được lỗi
   } catch (error) {
     console.error(`[GoogleSheet] Error syncing ${action}:`, error);
+    // Vẫn trả về true để không chặn luồng UI, vì dữ liệu đã lưu ở LocalStorage
+    return { success: false, error };
   }
 };
 
-// Generic fetch function for GET requests
+// Generic fetch function for GET requests (GET vẫn dùng CORS bình thường để đọc dữ liệu về)
 export const fetchFromSheet = async (action: string) => {
   try {
     console.log(`[GoogleSheet] Fetching ${action}...`);
